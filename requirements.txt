@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+numpy
+librosa
+joblib
+tensorflow
+resampy
+python-multipart

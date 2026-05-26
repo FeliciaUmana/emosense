@@ -3,7 +3,7 @@
 Recognizes human emotions from speech audio using deep learning.
 
 ## Live API
-https://emotion-recognition-api-pywn.onrender.com
+https://emosense-zd8b.onrender.com
 
 ## Emotions Detected
 angry, calm, disgust, fearful, happy, neutral, sad, surprised

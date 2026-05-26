@@ -1,94 +1,55 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+import io
 import numpy as np
 import librosa
 import joblib
-import tempfile
+import tensorflow as tf
+from fastapi import FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 import os
-from tensorflow.keras.models import load_model
+os.environ["PATH"] += r";C:\Users\HP\Downloads\ffmpeg-8.1.1-essentials_build (1)\ffmpeg-8.1.1-essentials_build\bin"
 
-app = FastAPI(
-    title="Emotion Recognition from Speech API",
-    description="Predicts human emotions from speech audio files",
-    version="1.0.0"
-)
+app = FastAPI(title='Speech Emotion Recognition API')
+app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
+model         = tf.keras.models.load_model("emotion_model.h5")
+scaler        = joblib.load("scaler.pkl")
+label_encoder = joblib.load("label_encoder.pkl")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Load model and preprocessors
-try:
-    model = load_model("emotion_model.h5")
-    scaler = joblib.load("scaler.pkl")
-    le = joblib.load("label_encoder.pkl")
-    print("Model loaded successfully!")
-except Exception as e:
-    print(f"Error loading model: {e}")
-    raise
-
-@app.get("/")
-def home():
-    return {
-        "message": "Emotion Recognition API is running!",
-        "endpoints": {
-            "predict": "/predict → POST (upload audio file)",
-            "health": "/health → GET",
-            "docs": "/docs → GET"
-        }
-    }
-
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "model_loaded": model is not None,
-        "emotions": list(le.classes_)
-    }
-
-@app.post("/predict")
+def extract_features(audio_bytes, n_mfcc=40):
+    import subprocess, tempfile
+    ffmpeg_path =  r"C:\Users\HP\Downloads\ffmpeg-8.1.1-essentials_build (1)\ffmpeg-8.1.1-essentials_build\bin\ffmpeg.exe"
+    with tempfile.NamedTemporaryFile(suffix='.input', delete=False) as tmp_in:
+        tmp_in.write(audio_bytes)
+        tmp_in_path = tmp_in.name
+    tmp_out_path = tmp_in_path + '.wav'
+    subprocess.run([ffmpeg_path, '-y', '-i', tmp_in_path, tmp_out_path], capture_output=True)
+    
+    audio, sr = librosa.load(tmp_out_path, res_type='kaiser_fast')
+    os.remove(tmp_in_path)
+    os.remove(tmp_out_path)
+    
+    mfcc = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=n_mfcc)
+    combined = np.hstack([
+        np.mean(mfcc.T, axis=0),
+        np.mean(librosa.feature.delta(mfcc).T, axis=0),
+        np.mean(librosa.feature.delta(mfcc, order=2).T, axis=0),
+        np.mean(librosa.feature.chroma_stft(y=audio, sr=sr).T, axis=0),
+        np.mean(librosa.feature.melspectrogram(y=audio, sr=sr).T, axis=0),
+        np.mean(librosa.feature.spectral_contrast(y=audio, sr=sr).T, axis=0)])
+    return combined
+@app.get('/')
+def root():
+    return {'message': 'Speech Emotion API is running. Go to/docs to test.'}
+@app.post('/predict')
 async def predict(file: UploadFile = File(...)):
-    try:
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-            contents = await file.read()
-            tmp.write(contents)
-            tmp_path = tmp.name
+    audio_bytes = await file.read()
+    features = extract_features(audio_bytes)
+    scaled = scaler.transform([features]).reshape(1, -1, 1)
+    predictions = model.predict(scaled, verbose=0)[0]
+    emotion = label_encoder.inverse_transform([np.argmax(predictions)])[0]
+    confidence = round(float(np.max(predictions))*100, 2)
+    all_probs = {label_encoder.classes_[i]:round(float(predictions[i])*100, 2) for i in range(len(predictions))}
+    return {'emotion': emotion, 'confidence':confidence, 'all_probabilities': all_probs}
 
-        # Extract MFCC features
-        audio, sample_rate = librosa.load(tmp_path, res_type='kaiser_fast')
-        mfccs = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=40)
-        mfccs_scaled = np.mean(mfccs.T, axis=0)
-
-        # Clean up temp file
-        os.unlink(tmp_path)
-
-        # Preprocess
-        features = scaler.transform([mfccs_scaled])
-        features = features.reshape(features.shape[0], features.shape[1], 1)
-
-        # Predict
-        prediction = model.predict(features)
-        emotion_index = np.argmax(prediction[0])
-        emotion = le.classes_[emotion_index]
-        confidence = float(prediction[0][emotion_index])
-
-        # All emotions with probabilities
-        all_emotions = {
-            le.classes_[i]: round(float(prediction[0][i]), 4)
-            for i in range(len(le.classes_))
-        }
-
-        return {
-            "predicted_emotion": emotion,
-            "confidence": round(confidence, 4),
-            "confidence_percent": f"{confidence * 100:.1f}%",
-            "all_emotions": all_emotions
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+if __name__ == '__main__':
+    uvicorn.run('main:app', host='0.0.0.0', port=8000, reload=True)

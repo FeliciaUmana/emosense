@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EmoSense — Speech Emotion AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --accent: #7c6aff;
+      --accent2: #ff6a9b;
+      --accent3: #6affda;
+      --text: #e8e8f0;
+      --muted: #6b6b80;
+      --angry: #ff4444;
+      --happy: #ffcc00;
+      --sad: #4488ff;
+      --fearful: #aa44ff;
+      --neutral: #888899;
+      --surprised: #ff8844;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(124,106,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,106,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .glow-orb {
+      position: fixed;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.12;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .glow-orb.a { background: var(--accent); top: -200px; left: -200px; }
+    .glow-orb.b { background: var(--accent2); bottom: -200px; right: -200px; }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 60px 24px;
+    }
+
+    /* Header */
+    header { text-align: center; margin-bottom: 60px; }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .logo-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    .logo-text {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(36px, 7vw, 64px);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      margin-bottom: 16px;
+    }
+
+    h1 span {
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Upload card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.5;
+    }
+
+    .card-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(124,106,255,0.05);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .drop-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .drop-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .file-selected {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: rgba(124,106,255,0.1);
+      border: 1px solid rgba(124,106,255,0.3);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--accent);
+      display: none;
+    }
+
+    /* Waveform animation */
+    .waveform {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 40px;
+      margin: 20px 0;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .waveform.active { opacity: 1; }
+
+    .wave-bar {
+      width: 3px;
+      background: linear-gradient(to top, var(--accent), var(--accent2));
+      border-radius: 2px;
+      animation: wave 1.2s ease-in-out infinite;
+    }
+
+    @keyframes wave {
+      0%, 100% { height: 4px; }
+      50% { height: 32px; }
+    }
+
+    .wave-bar:nth-child(1) { animation-delay: 0s; }
+    .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+    .wave-bar:nth-child(6) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(7) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(8) { animation-delay: 0.1s; }
+    .wave-bar:nth-child(9) { animation-delay: 0s; }
+
+    /* Button */
+    .btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-family: 'Syne', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(124,106,255,0.4); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-loading {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Result card */
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      display: none;
+      animation: slideUp 0.4s ease;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-card.visible { display: block; }
+
+    .emotion-display {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .emotion-emoji {
+      font-size: 72px;
+      display: block;
+      margin-bottom: 12px;
+      animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .emotion-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 42px;
+      font-weight: 800;
+      text-transform: capitalize;
+      letter-spacing: -1px;
+    }
+
+    .confidence-badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 4px 12px;
+      background: rgba(124,106,255,0.15);
+      border: 1px solid rgba(124,106,255,0.3);
+      border-radius: 20px;
+      font-size: 13px;
+      color: var(--accent);
+    }
+
+    /* Probability bars */
+    .probs-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .prob-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .prob-emotion {
+      width: 80px;
+      font-size: 12px;
+      text-transform: capitalize;
+      color: var(--muted);
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .prob-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .prob-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      width: 0%;
+    }
+
+    .prob-pct {
+      width: 42px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Error */
+    .error-msg {
+      background: rgba(255,68,68,0.1);
+      border: 1px solid rgba(255,68,68,0.3);
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #ff6666;
+      margin-top: 16px;
+      display: none;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 48px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-orb a"></div>
+  <div class="glow-orb b"></div>
+
+  <div class="container">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">🎙</div>
+        <div class="logo-text">EmoSense</div>
+      </div>
+      <h1>Detect <span>Emotion</span><br/>From Voice</h1>
+      <p class="subtitle">Upload an audio file — AI detects the emotion instantly</p>
+    </header>
+
+    <div class="card">
+      <div class="card-label">// Upload Audio</div>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="audioFile" accept=".wav,.mp3,.m4a,.ogg,.flac"/>
+        <span class="drop-icon">🎵</span>
+        <div class="drop-title">Drop your audio file here</div>
+        <div class="drop-sub">Supports WAV, MP3, M4A, OGG, FLAC</div>
+      </div>
+
+      <div class="file-selected" id="fileSelected">📎 <span id="fileName"></span></div>
+
+      <div class="waveform" id="waveform">
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
+
+      <button class="btn" id="predictBtn" onclick="predict()">
+        <span id="btnText">Analyze Emotion</span>
+        <span class="btn-loading" id="btnLoading">
+          <div class="spinner"></div> Analyzing...
+        </span>
+      </button>
+
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+
+    <div class="result-card" id="resultCard">
+      <div class="card-label">// Result</div>
+      <div class="emotion-display">
+        <span class="emotion-emoji" id="emotionEmoji"></span>
+        <div class="emotion-name" id="emotionName"></div>
+        <div class="confidence-badge" id="confidenceBadge"></div>
+      </div>
+      <div class="probs-label">// All Probabilities</div>
+      <div id="probBars"></div>
+    </div>
+
+    <footer>EmoSense — Speech Emotion Recognition · Powered by CNN-BiLSTM</footer>
+  </div>
+
+  <script>
+    // ── CONFIG: change this to your Render URL when deployed ──
+    const API_URL = 'http://127.0.0.1:8000';
+
+    const emojiMap = {
+      angry: '😠', happy: '😊', sad: '😢', fearful: '😨',
+      fear: '😨', neutral: '😐', surprised: '😲', surprise: '😲',
+      disgust: '🤢', calm: '😌'
+    };
+
+    const fileInput = document.getElementById('audioFile');
+    const dropZone  = document.getElementById('dropZone');
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) showFile(fileInput.files[0].name);
+    });
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) {
+        fileInput.files = e.dataTransfer.files;
+        showFile(e.dataTransfer.files[0].name);
+      }
+    });
+
+    function showFile(name) {
+      document.getElementById('fileName').textContent = name;
+      document.getElementById('fileSelected').style.display = 'block';
+    }
+
+    async function predict() {
+      const file = fileInput.files[0];
+      if (!file) { showError('Please select an audio file first.'); return; }
+
+      // UI: loading state
+      setLoading(true);
+      hideError();
+      document.getElementById('resultCard').classList.remove('visible');
+      document.getElementById('waveform').classList.add('active');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch(`${API_URL}/predict`, { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+        const data = await res.json();
+        showResult(data);
+      } catch (err) {
+        showError('Could not connect to the API. Make sure the server is running.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+        document.getElementById('waveform').classList.remove('active');
+      }
+    }
+
+    function showResult(data) {
+      const emotion = data.emotion.toLowerCase();
+      document.getElementById('emotionEmoji').textContent = emojiMap[emotion] || '🎙';
+      document.getElementById('emotionName').textContent = data.emotion;
+      document.getElementById('confidenceBadge').textContent = `${data.confidence}% confidence`;
+
+      // Probability bars
+      const container = document.getElementById('probBars');
+      container.innerHTML = '';
+      Object.entries(data.all_probabilities).forEach(([emo, pct]) => {
+        container.innerHTML += `
+          <div class="prob-row">
+            <div class="prob-emotion">${emo}</div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar-fill" data-pct="${pct}"></div>
+            </div>
+            <div class="prob-pct">${pct}%</div>
+          </div>`;
+      });
+
+      document.getElementById('resultCard').classList.add('visible');
+
+      // Animate bars after render
+      setTimeout(() => {
+        document.querySelectorAll('.prob-bar-fill').forEach(bar => {
+          bar.style.width = bar.dataset.pct + '%';
+        });
+      }, 100);
+    }
+
+    function setLoading(on) {
+      const btn = document.getElementById('predictBtn');
+      document.getElementById('btnText').style.display   = on ? 'none' : 'inline';
+      document.getElementById('btnLoading').style.display = on ? 'flex' : 'none';
+      btn.disabled = on;
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function hideError() {
+      document.getElementById('errorMsg').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

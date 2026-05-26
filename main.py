@@ -48,17 +48,21 @@ def root():
 
 @app.post('/predict')
 async def predict(file: UploadFile = File(...)):
-    audio_bytes = await file.read()
-    features = extract_features(audio_bytes)
-    scaled = scaler.transform([features]).reshape(1, -1, 1)
-    predictions = model.predict(scaled, verbose=0)[0]
-    emotion = label_encoder.inverse_transform([np.argmax(predictions)])[0]
-    confidence = round(float(np.max(predictions)) * 100, 2)
-    all_probs = {
-        label_encoder.classes_[i]: round(float(predictions[i]) * 100, 2)
-        for i in range(len(predictions))
-    }
-    return {'emotion': emotion, 'confidence': confidence, 'all_probabilities': all_probs}
+    try:
+        audio_bytes = await file.read()
+        features = extract_features(audio_bytes)
+        scaled = scaler.transform([features]).reshape(1, -1, 1)
+        predictions = model.predict(scaled, verbose=0)[0]
+        emotion = label_encoder.inverse_transform([np.argmax(predictions)])[0]
+        confidence = round(float(np.max(predictions)) * 100, 2)
+        all_probs = {
+            label_encoder.classes_[i]: round(float(predictions[i]) * 100, 2)
+            for i in range(len(predictions))
+        }
+        return {'emotion': emotion, 'confidence': confidence, 'all_probabilities': all_probs}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "detail": traceback.format_exc()}
 
 if __name__ == '__main__':
     uvicorn.run('main:app', host='0.0.0.0', port=8000, reload=True)

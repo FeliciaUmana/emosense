@@ -12,7 +12,7 @@ Deployed on **Render.com** as a free web service.
 https://emosense-zd8b.onrender.com
 
 ## Fontend live Test
-https://feliciaumana.github.io/emosense/
+[https://feliciaumana.github.io/emosense/](https://keen-narwhal-889fb8.netlify.app/)
 
 
 
